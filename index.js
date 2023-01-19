@@ -37,10 +37,11 @@ app.use(
 
 const { runQueryAsync, parseData } = require("./initsql");
 const { deflate } = require("zlib");
+const e = require("cors");
 
 io.on("connection", (socket) => {
   user += 1;
-  console.log(user + " user connected " + socket.id);
+  //  console.log(user+' user connected '+socket.id);
   //  getDataOut();
   socket.on("exec", function (query) {
     odbc.connect(connectionString, (errconn, connection) => {
@@ -68,7 +69,7 @@ io.on("connection", (socket) => {
   });
   socket.on("disconnect", function () {
     user -= 1;
-    console.log(user + " user connected");
+    // console.log(user+' user connected');
   });
 });
 app.get("/test", (req, res) => {
@@ -79,30 +80,166 @@ app.get("/conn1", (req, res) => {
   res.send("Refresh Done REACT");
 });
 
+function checkColumnHasID(name, table_col) {
+  var adaID = false;
+  table_col.forEach((coldef) => {
+    if (name + "_id" === coldef.name) {
+      adaID = true;
+    }
+  });
+  return adaID;
+}
+app.post("/delete", (req, res) => {
+  let data = JSON.parse(req.body);
+  let table_col = data.table_col;
+  let tipe = data.tipe;
+  let inputOut = data.inputOut;
+  let selectquery = data.selectquery;
+  var updateVal = "";
+  var querycol = "";
+  table_col.forEach((col) => {
+    if (col.name === tipe + "_id") {
+      if (inputOut[col.name] !== "" && inputOut[col.name] !== undefined) {
+        updateVal = " where " + col.name + "=" + inputOut[col.name];
+      }
+    }
+  });
+  if (updateVal !== "") {
+    querycol = "delete from " + tipe + " " + updateVal;
+    getDataInsert(querycol, selectquery, res);
+  } else {
+    res.send({ err: "Column " + tipe + "_id Not Found" });
+  }
+});
+async function SaveDetail(data, res) {
+  let Table_detail = data.Table_detail;
+  let table_col = data.table_col;
+  let inputOut = data.inputOut;
+  let selectquery = data.selectquery;
+  let tipe = data.tipe;
+  var err = "";
+  var queryval = "";
+  var querycol = "";
+  if (Table_detail.val[0] && "empty" in Table_detail.val[0] === false) {
+    try {
+      await runQueryAsync(
+        "delete from " +
+          tipe +
+          "_detail where " +
+          tipe +
+          "_id=" +
+          inputOut[tipe + "_id"]
+      );
+    } catch (error) {
+      err +=
+        "Detail Row " +
+        Table_detail.val.indexOf(detailVal) +
+        ":" +
+        error.sqlMessage +
+        "\r\n";
+    }
+    for (const detailVal of Table_detail.val) {
+      var queryval = inputOut[tipe + "_id"];
+      var querycol = tipe + "_id";
+      for (const col of Table_detail.col) {
+        var adaID = checkColumnHasID(col.name, Table_detail.col);
+
+        if (col.name !== tipe + "_id" && adaID === false) {
+          if (querycol !== "") {
+            querycol += ",";
+            queryval += ",";
+          }
+          querycol += col.name;
+          queryval += "'" + detailVal[col.name] + "'";
+        }
+      }
+
+      querycol =
+        "insert into " +
+        tipe +
+        "_detail (" +
+        querycol +
+        ") values (" +
+        queryval +
+        ")";
+      try {
+        await runQueryAsync(querycol);
+      } catch (error) {
+        console.log(error);
+        err +=
+          "Detail Row " +
+          Table_detail.val.indexOf(detailVal) +
+          ":" +
+          error.sqlMessage +
+          "\r\n";
+      }
+    }
+    if (err !== "") {
+      res.send({ error: err });
+      return;
+    }
+  }
+  queryval = "";
+  querycol = "";
+  var updateVal = "";
+  table_col.forEach((col) => {
+    var adaID = checkColumnHasID(col.name, table_col);
+    if (col.name === tipe + "_id") {
+      if (inputOut[col.name] !== "" && inputOut[col.name] !== undefined) {
+        updateVal = " where " + col.name + "=" + inputOut[col.name];
+      }
+    }
+    if (updateVal !== "") {
+      if (col.name !== tipe + "_id" && adaID === false) {
+        if (querycol !== "") {
+          querycol += ",";
+        }
+
+        querycol += col.name + "='" + inputOut[col.name] + "'";
+      }
+    } else {
+      if (col.name !== tipe + "_id" && adaID === false) {
+        if (querycol !== "") {
+          querycol += ",";
+          queryval += ",";
+        }
+        querycol += col.name;
+        queryval += "'" + inputOut[col.name] + "'";
+      }
+    }
+  });
+  if (updateVal !== "") {
+    querycol = "update " + tipe + " set " + querycol + updateVal;
+  } else {
+    querycol =
+      "insert into " + tipe + " (" + querycol + ") values (" + queryval + ")";
+  }
+  getDataInsert(querycol, selectquery, res);
+}
+app.post("/update", (req, res) => {
+  let data = JSON.parse(req.body);
+  SaveDetail(data, res);
+});
+
 app.get("/", (req, res) => {
   res.sendFile(__dirname + "/main.html");
 });
-app.get("/execmysql/:command", (req, res) => {
-  console.log(req.params.command);
-  runMySQLQuery(req.params.command, res);
-});
+
 app.get("/exec/:command", (req, res) => {
-  console.log(req.params.command);
+  // console.log(req.params.command);
   getData(req.params.command, res);
 });
-app.get("/insert/:insert/:select", (req, res) => {
-  console.log(req.params.insert);
-  getDataInsert(req.params.insert, req.params.select, res);
-});
+
 app.get("/Stock1", (req, res) => {
   res.render("main", { layout: "main", title: "DATA STOCK 1012", page: "1" });
 });
 async function getData(query, res) {
   try {
     const result = await runQueryAsync(query);
+    console.log(query);
     res.send(result);
   } catch (error) {
-    res.send({ err: error.toString() });
+    res.send({ error: error.toString() });
   }
 }
 async function getDataInsert(query, select, res) {
@@ -116,11 +253,10 @@ async function getDataInsert(query, select, res) {
 
     const result = await runQueryAsync(select);
     result.error = err;
-    console.log(result);
     res.send(result);
   } catch (error) {
     console.log(error);
-    res.send({ err: error.toString() });
+    res.send({ error: error.toString() });
   }
 }
 
