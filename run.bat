@@ -1,0 +1,1 @@
+call %~dp0node %~dp0index.js

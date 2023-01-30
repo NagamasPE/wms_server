@@ -445,6 +445,24 @@ app.post("/delete",(req,res)=>{
     res.send({"err":"Column "+tipe+"_id Not Found"})
   }
 })
+async function Login(data,res){
+  let username=data.username
+  let password=data.password
+  try {
+    const result=await runQueryAsync("select * from admin where username='"+username+"' and password='"+password+"'")
+    if (result.val[0]){
+      res.send({status:"ok"})
+    }else{
+      res.send({error:"Username or Password invalid"})
+    }
+    
+    
+  } catch (error) {
+	
+  res.send({error:error.toString()})
+  }
+
+}
 async function SaveDetail(data,res){
   let Table_detail=data.Table_detail
   let table_col=data.table_col
@@ -530,6 +548,13 @@ async function SaveDetail(data,res){
   }
   getDataInsert(querycol,selectquery,res);
 }
+app.post("/login",(req,res)=>{
+  let data =JSON.parse(req.body)
+  console.log(data)
+  Login(data,res)
+  
+
+})
 app.post("/update",(req,res)=>{
   let data =JSON.parse(req.body)
   SaveDetail(data,res)

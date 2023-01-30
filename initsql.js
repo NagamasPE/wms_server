@@ -7,13 +7,14 @@ var config = {
   user: process.env.DSN_UID,
   password: process.env.DSN_PWD,
   host: process.env.SERVER, 
-  database: process.env.DSN_DB
+  database: process.env.DSN_DB,
+  timezone: 'UTC'
 };
 
 
 
 const runQueryAsync = (str) =>{
-  console.log(str);
+  // console.log(str);
   return new Promise((resolve,reject)=> {
     var conn = mysql.createConnection(config)
     conn.connect((err)=>{
